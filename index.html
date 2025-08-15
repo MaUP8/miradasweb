@@ -6,12 +6,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     html,body{margin:0;height:100%;background:#0b0b0b;color:#eee;font-family:system-ui}
-    header{padding:12px 16px;border-bottom:1px solid #222;display:flex;justify-content:space-between}
-    main{display:grid;grid-template-columns:1fr 1fr;gap:8px;height:calc(100% - 58px);padding:8px}
+    header{padding:12px 16px;border-bottom:1px solid #222;display:flex;justify-content:space-between;gap:8px;align-items:center}
+    main{display:grid;grid-template-columns:1fr 1fr;gap:8px;height:calc(100% - 82px);padding:8px}
     video{width:100%;height:100%;object-fit:cover;background:#111;border-radius:16px}
-    .controls{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+    .controls{display:flex;gap:8px;padding:8px}
     button{background:#1f1f1f;color:#eee;border:1px solid #333;border-radius:12px;padding:10px 14px;cursor:pointer}
     .badge{font-size:12px;padding:4px 8px;border:1px solid #444;border-radius:999px}
+    #debug{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#111;border-top:1px solid #222;padding:8px;height:120px;overflow:auto}
     footer{position:fixed;bottom:0;right:0;font-size:11px;padding:8px 10px;opacity:.7}
   </style>
 </head>
@@ -19,6 +20,11 @@
   <header>
     <div>Miradas — <span class="badge">ver y ser visto</span></div>
     <div id="status" class="badge">Estado: listo</div>
+    <div class="controls">
+      <button id="enterBtn">Entrar (compartir cámara)</button>
+      <button id="nextBtn" disabled>Siguiente</button>
+      <button id="leaveBtn" disabled>Salir</button>
+    </div>
   </header>
   <main>
     <div>
@@ -30,19 +36,19 @@
       <div style="padding:6px 4px; font-size:12px; opacity:.8;">La otra cámara</div>
     </div>
   </main>
-  <div class="controls">
-    <button id="enterBtn">Entrar (compartir cámara)</button>
-    <button id="nextBtn" disabled>Siguiente</button>
-    <button id="leaveBtn" disabled>Salir</button>
-  </div>
+
+  <div id="debug"></div>
   <footer>18+. No podemos impedir capturas. Sin chat. Ética primero.</footer>
 
   <!-- Firebase (modular SDK) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      getFirestore, collection, addDoc, doc, onSnapshot, setDoc, updateDoc, deleteDoc,
+      serverTimestamp, getDoc, runTransaction
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // Tu configuración de Firebase
+    // === TU CONFIG ===
     const firebaseConfig = {
       apiKey: "AIzaSyBQpw229ZmaSOegmCYVeLinPrIBUW_8sd0",
       authDomain: "miradasweb-b6014.firebaseapp.com",
@@ -51,6 +57,7 @@
       messagingSenderId: "70594677635",
       appId: "1:70594677635:web:ce0e8bda5855383148c4b6"
     };
+    // =================
 
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
@@ -61,60 +68,73 @@
     const leaveBtn   = document.getElementById('leaveBtn');
     const localVideo = document.getElementById('local');
     const remoteVideo= document.getElementById('remote');
+    const debugEl    = document.getElementById('debug');
 
     let pc, localStream;
     let roomRef, role; // "caller" o "callee"
-    let unsubOffer, unsubAnswer, unsubCalleeCandidates, unsubCallerCandidates;
+    let unsubRoom, unsubCallerCands, unsubCalleeCands;
 
     const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 
-    function setStatus(t){ statusEl.textContent = "Estado: " + t; }
+    const log = (...a)=>{ console.log(...a); debugEl.innerText += a.map(x=>typeof x==='object'?JSON.stringify(x):String(x)).join(' ')+"\n"; debugEl.scrollTop=debugEl.scrollHeight; };
+    const setStatus = t => { statusEl.textContent = "Estado: " + t; log("STATUS:", t); };
 
     async function getMedia(){
       localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
       localVideo.srcObject = localStream;
+      log("getUserMedia ok");
     }
 
     function createPC(){
       pc = new RTCPeerConnection({ iceServers });
       localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-      pc.ontrack = ev => { remoteVideo.srcObject = ev.streams[0]; };
-    }
-
-    // Emparejamiento simple
-    async function matchOrCreateRoom(){
-      const roomsCol = collection(db, "rooms");
-      const q = query(roomsCol, where("status","==","waiting"));
-      const snap = await getDocs(q);
-
-      if (!snap.empty){
-        role = "callee";
-        roomRef = doc(db, "rooms", snap.docs[0].id);
-        await updateDoc(roomRef, { status:"paired", calleeJoinedAt: serverTimestamp() });
-      } else {
-        role = "caller";
-        roomRef = doc(collection(db, "rooms"));
-        await setDoc(roomRef, { status:"waiting", createdAt: serverTimestamp() });
-      }
-    }
-
-    async function startSignaling(){
-      const callerCandidatesCol = collection(roomRef, "callerCandidates");
-      const calleeCandidatesCol = collection(roomRef, "calleeCandidates");
-
+      pc.ontrack = ev => { remoteVideo.srcObject = ev.streams[0]; log("ontrack: remote stream recibido"); };
       pc.onicecandidate = async (event) => {
-        if (event.candidate) {
-          const targetCol = (role === "caller") ? callerCandidatesCol : calleeCandidatesCol;
+        if (event.candidate && roomRef) {
+          const targetCol = (role === "caller")
+            ? collection(roomRef, "callerCandidates")
+            : collection(roomRef, "calleeCandidates");
           await addDoc(targetCol, JSON.parse(JSON.stringify(event.candidate)));
         }
       };
+      log("RTCPeerConnection creado");
+    }
 
+    // Emparejador atómico con doc único: meta/waiting
+    async function matchOrCreateRoom(){
+      const waitingRef = doc(db, "meta", "waiting");
+
+      await runTransaction(db, async (tx) => {
+        const waitingSnap = await tx.get(waitingRef);
+
+        if (!waitingSnap.exists() || !waitingSnap.data().roomId) {
+          // NADIE esperando: creo sala y me marco como caller, dejo mi roomId en waiting
+          role = "caller";
+          roomRef = doc(collection(db, "rooms"));
+          tx.set(roomRef, { status:"waiting", createdAt: serverTimestamp() });
+          tx.set(waitingRef, { roomId: roomRef.id, since: serverTimestamp() });
+          log("Soy CALLER. Room:", roomRef.id);
+        } else {
+          // HAY alguien esperando: lo tomo y limpio waiting; yo soy callee
+          role = "callee";
+          const rid = waitingSnap.data().roomId;
+          roomRef = doc(db, "rooms", rid);
+          tx.update(waitingRef, { roomId: null, since: serverTimestamp() });
+          tx.update(roomRef, { status:"paired", calleeJoinedAt: serverTimestamp() });
+          log("Soy CALLEE. Par con room:", rid);
+        }
+      });
+    }
+
+    async function startSignaling(){
+      // listeners de sala y candidatos
       if (role === "caller"){
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await updateDoc(roomRef, { offer: { type: offer.type, sdp: offer.sdp } });
+        log("Offer creada y subida");
 
-        unsubAnswer = onSnapshot(roomRef, async (snap)=>{
+        unsubRoom = onSnapshot(roomRef, async (snap)=>{
           const data = snap.data();
           if (data?.answer && !pc.currentRemoteDescription){
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
@@ -123,16 +143,16 @@
           }
         });
 
-        unsubCalleeCandidates = onSnapshot(calleeCandidatesCol, (snap)=>{
+        unsubCalleeCands = onSnapshot(collection(roomRef, "calleeCandidates"), (snap)=>{
           snap.docChanges().forEach(async (c)=>{
             if (c.type === "added"){
-              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); } catch {}
+              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); log("ICE callee agregado"); } catch(e){ log("ICE callee error", e); }
             }
           });
         });
 
-      } else { // callee
-        unsubOffer = onSnapshot(roomRef, async (snap)=>{
+      } else {
+        unsubRoom = onSnapshot(roomRef, async (snap)=>{
           const data = snap.data();
           if (data?.offer && !pc.currentRemoteDescription){
             await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -141,13 +161,14 @@
             await updateDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } });
             setStatus("conectado");
             nextBtn.disabled = false; leaveBtn.disabled = false;
+            log("Answer creada y subida");
           }
         });
 
-        unsubCallerCandidates = onSnapshot(collection(roomRef, "callerCandidates"), (snap)=>{
+        unsubCallerCands = onSnapshot(collection(roomRef, "callerCandidates"), (snap)=>{
           snap.docChanges().forEach(async (c)=>{
             if (c.type === "added"){
-              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); } catch {}
+              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); log("ICE caller agregado"); } catch(e){ log("ICE caller error", e); }
             }
           });
         });
@@ -155,28 +176,31 @@
     }
 
     async function enter(){
-      enterBtn.disabled = true;
-      setStatus("pidiendo cámara…");
-      await getMedia();
-      createPC();
-      setStatus("buscando pareja…");
-      await matchOrCreateRoom();
-      await startSignaling();
+      try{
+        enterBtn.disabled = true;
+        setStatus("pidiendo cámara…");
+        await getMedia();
+        createPC();
+        setStatus("buscando pareja…");
+        await matchOrCreateRoom();
+        await startSignaling();
+      } catch(e){
+        log("ERROR enter()", e);
+        enterBtn.disabled = false;
+      }
     }
 
     async function cleanup(){
       nextBtn.disabled = true; leaveBtn.disabled = true;
-      if (unsubOffer) unsubOffer(); if (unsubAnswer) unsubAnswer();
-      if (unsubCallerCandidates) unsubCallerCandidates();
-      if (unsubCalleeCandidates) unsubCalleeCandidates();
-
+      try { if (unsubRoom) unsubRoom(); if (unsubCallerCands) unsubCallerCands(); if (unsubCalleeCands) unsubCalleeCands(); } catch{}
       try { if (roomRef) await updateDoc(roomRef, { status:"ended" }); } catch{}
       try { if (roomRef) await deleteDoc(roomRef); } catch{}
       roomRef = null;
 
       if (pc){
         pc.getSenders().forEach(s=>{ try{ s.track.stop(); }catch{} });
-        pc.close(); pc = null;
+        try{ pc.close(); }catch{}
+        pc = null;
       }
       remoteVideo.srcObject = null;
       localVideo.srcObject = null;
