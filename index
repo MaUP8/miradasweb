@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Miradas — intercambio 1:1</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    html,body{margin:0;height:100%;background:#0b0b0b;color:#eee;font-family:system-ui}
+    header{padding:12px 16px;border-bottom:1px solid #222;display:flex;justify-content:space-between}
+    main{display:grid;grid-template-columns:1fr 1fr;gap:8px;height:calc(100% - 58px);padding:8px}
+    video{width:100%;height:100%;object-fit:cover;background:#111;border-radius:16px}
+    .controls{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+    button{background:#1f1f1f;color:#eee;border:1px solid #333;border-radius:12px;padding:10px 14px;cursor:pointer}
+    .badge{font-size:12px;padding:4px 8px;border:1px solid #444;border-radius:999px}
+    footer{position:fixed;bottom:0;right:0;font-size:11px;padding:8px 10px;opacity:.7}
+  </style>
+</head>
+<body>
+  <header>
+    <div>Miradas — <span class="badge">ver y ser visto</span></div>
+    <div id="status" class="badge">Estado: listo</div>
+  </header>
+  <main>
+    <div>
+      <video id="local" autoplay playsinline muted></video>
+      <div style="padding:6px 4px; font-size:12px; opacity:.8;">Tu cámara</div>
+    </div>
+    <div>
+      <video id="remote" autoplay playsinline></video>
+      <div style="padding:6px 4px; font-size:12px; opacity:.8;">La otra cámara</div>
+    </div>
+  </main>
+  <div class="controls">
+    <button id="enterBtn">Entrar (compartir cámara)</button>
+    <button id="nextBtn" disabled>Siguiente</button>
+    <button id="leaveBtn" disabled>Salir</button>
+  </div>
+  <footer>18+. No podemos impedir capturas. Sin chat. Ética primero.</footer>
+
+  <!-- Firebase (modular SDK) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, doc, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Tu configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQpw229ZmaSOegmCYVeLinPrIBUW_8sd0",
+      authDomain: "miradasweb-b6014.firebaseapp.com",
+      projectId: "miradasweb-b6014",
+      storageBucket: "miradasweb-b6014.appspot.com",
+      messagingSenderId: "70594677635",
+      appId: "1:70594677635:web:ce0e8bda5855383148c4b6"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    const statusEl   = document.getElementById('status');
+    const enterBtn   = document.getElementById('enterBtn');
+    const nextBtn    = document.getElementById('nextBtn');
+    const leaveBtn   = document.getElementById('leaveBtn');
+    const localVideo = document.getElementById('local');
+    const remoteVideo= document.getElementById('remote');
+
+    let pc, localStream;
+    let roomRef, role; // "caller" o "callee"
+    let unsubOffer, unsubAnswer, unsubCalleeCandidates, unsubCallerCandidates;
+
+    const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+
+    function setStatus(t){ statusEl.textContent = "Estado: " + t; }
+
+    async function getMedia(){
+      localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+      localVideo.srcObject = localStream;
+    }
+
+    function createPC(){
+      pc = new RTCPeerConnection({ iceServers });
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      pc.ontrack = ev => { remoteVideo.srcObject = ev.streams[0]; };
+    }
+
+    // Emparejamiento simple
+    async function matchOrCreateRoom(){
+      const roomsCol = collection(db, "rooms");
+      const q = query(roomsCol, where("status","==","waiting"));
+      const snap = await getDocs(q);
+
+      if (!snap.empty){
+        role = "callee";
+        roomRef = doc(db, "rooms", snap.docs[0].id);
+        await updateDoc(roomRef, { status:"paired", calleeJoinedAt: serverTimestamp() });
+      } else {
+        role = "caller";
+        roomRef = doc(collection(db, "rooms"));
+        await setDoc(roomRef, { status:"waiting", createdAt: serverTimestamp() });
+      }
+    }
+
+    async function startSignaling(){
+      const callerCandidatesCol = collection(roomRef, "callerCandidates");
+      const calleeCandidatesCol = collection(roomRef, "calleeCandidates");
+
+      pc.onicecandidate = async (event) => {
+        if (event.candidate) {
+          const targetCol = (role === "caller") ? callerCandidatesCol : calleeCandidatesCol;
+          await addDoc(targetCol, JSON.parse(JSON.stringify(event.candidate)));
+        }
+      };
+
+      if (role === "caller"){
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await updateDoc(roomRef, { offer: { type: offer.type, sdp: offer.sdp } });
+
+        unsubAnswer = onSnapshot(roomRef, async (snap)=>{
+          const data = snap.data();
+          if (data?.answer && !pc.currentRemoteDescription){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            setStatus("conectado");
+            nextBtn.disabled = false; leaveBtn.disabled = false;
+          }
+        });
+
+        unsubCalleeCandidates = onSnapshot(calleeCandidatesCol, (snap)=>{
+          snap.docChanges().forEach(async (c)=>{
+            if (c.type === "added"){
+              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); } catch {}
+            }
+          });
+        });
+
+      } else { // callee
+        unsubOffer = onSnapshot(roomRef, async (snap)=>{
+          const data = snap.data();
+          if (data?.offer && !pc.currentRemoteDescription){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await updateDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } });
+            setStatus("conectado");
+            nextBtn.disabled = false; leaveBtn.disabled = false;
+          }
+        });
+
+        unsubCallerCandidates = onSnapshot(collection(roomRef, "callerCandidates"), (snap)=>{
+          snap.docChanges().forEach(async (c)=>{
+            if (c.type === "added"){
+              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); } catch {}
+            }
+          });
+        });
+      }
+    }
+
+    async function enter(){
+      enterBtn.disabled = true;
+      setStatus("pidiendo cámara…");
+      await getMedia();
+      createPC();
+      setStatus("buscando pareja…");
+      await matchOrCreateRoom();
+      await startSignaling();
+    }
+
+    async function cleanup(){
+      nextBtn.disabled = true; leaveBtn.disabled = true;
+      if (unsubOffer) unsubOffer(); if (unsubAnswer) unsubAnswer();
+      if (unsubCallerCandidates) unsubCallerCandidates();
+      if (unsubCalleeCandidates) unsubCalleeCandidates();
+
+      try { if (roomRef) await updateDoc(roomRef, { status:"ended" }); } catch{}
+      try { if (roomRef) await deleteDoc(roomRef); } catch{}
+      roomRef = null;
+
+      if (pc){
+        pc.getSenders().forEach(s=>{ try{ s.track.stop(); }catch{} });
+        pc.close(); pc = null;
+      }
+      remoteVideo.srcObject = null;
+      localVideo.srcObject = null;
+      setStatus("saliste");
+      enterBtn.disabled = false;
+    }
+
+    async function next(){
+      await cleanup();
+      await enter();
+      setStatus("siguiente pareja…");
+    }
+
+    document.getElementById('enterBtn').onclick = enter;
+    document.getElementById('leaveBtn').onclick = cleanup;
+    document.getElementById('nextBtn').onclick  = next;
+  </script>
+</body>
+</html>
