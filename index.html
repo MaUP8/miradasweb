@@ -1,222 +1,930 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Miradas — intercambio 1:1</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Potencial Salón — Calendario + KIT real + Rentabilidad (ROS/ROI)</title>
   <style>
-    html,body{margin:0;height:100%;background:#0b0b0b;color:#eee;font-family:system-ui}
-    header{padding:12px 16px;border-bottom:1px solid #222;display:flex;justify-content:space-between;gap:8px;align-items:center}
-    main{display:grid;grid-template-columns:1fr 1fr;gap:8px;height:calc(100% - 82px);padding:8px}
-    video{width:100%;height:100%;object-fit:cover;background:#111;border-radius:16px}
-    .controls{display:flex;gap:8px;padding:8px}
-    button{background:#1f1f1f;color:#eee;border:1px solid #333;border-radius:12px;padding:10px 14px;cursor:pointer}
-    .badge{font-size:12px;padding:4px 8px;border:1px solid #444;border-radius:999px}
-    #debug{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#111;border-top:1px solid #222;padding:8px;height:120px;overflow:auto}
-    footer{position:fixed;bottom:0;right:0;font-size:11px;padding:8px 10px;opacity:.7}
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 1260px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .row { display: grid; grid-template-columns: 1.45fr 1fr; gap: 10px; align-items: center; margin: 10px 0; }
+    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    label { font-weight: 600; }
+    input[type="number"], input[type="text"], select { width: 100%; padding: 8px; border-radius: 10px; border: 1px solid #ccc; }
+    input[type="range"] { width: 100%; }
+    .hint { color: #666; font-size: 12px; }
+    .out { font-size: 18px; font-weight: 800; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .small { font-size: 13px; color: #333; }
+    .btns { display:flex; gap:10px; flex-wrap: wrap; margin-top: 10px; }
+    button { padding: 8px 12px; border-radius: 10px; border: 1px solid #bbb; background: #f7f7f7; cursor: pointer; }
+    button:hover { background: #eee; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button.primary:hover { background:#000; }
+    button.danger { background:#fff3f3; border-color:#e5bcbc; }
+    .daysTable { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .daysTable th, .daysTable td { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; vertical-align: top; }
+    .pill { display:inline-block; padding: 2px 8px; border:1px solid #ddd; border-radius: 999px; font-size: 12px; color:#444; }
+    hr { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+    .twoCols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .box { border: 1px dashed #ddd; border-radius: 10px; padding: 10px; margin-top: 10px; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .table th, .table td { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
+    .table td:last-child, .right { text-align: right; }
+    .kpiLine { display:flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #eee; }
+    .kpiLine b { font-weight: 900; }
+    .bad { color:#b00020; font-weight:800; }
+    .warn { color:#8a5a00; font-weight:800; }
+    .ok { color:#0a7a3a; font-weight:800; }
+
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ===== Print summary ===== */
+    #printArea { display: none; }
+    #printArea .printGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    #printArea h2 { margin: 0 0 8px; }
+    #printArea h3 { margin: 14px 0 6px; }
+    #printArea table { width: 100%; border-collapse: collapse; }
+    #printArea th, #printArea td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
+    #printArea .kv { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+    #printArea .kv div { padding: 6px 0; border-bottom: 1px dashed #ddd; }
+    #printArea .val { font-weight: 800; }
+    #printArea .big { font-size: 18px; font-weight: 900; }
+
+    @media print {
+      body { margin: 0; padding: 24px; }
+      .grid, .btns, button { display: none !important; }
+      #printArea { display: block !important; }
+    }
   </style>
 </head>
+
 <body>
-  <header>
-    <div>Miradas — <span class="badge">ver y ser visto</span></div>
-    <div id="status" class="badge">Estado: listo</div>
-    <div class="controls">
-      <button id="enterBtn">Entrar (compartir cámara)</button>
-      <button id="nextBtn" disabled>Siguiente</button>
-      <button id="leaveBtn" disabled>Salir</button>
-    </div>
-  </header>
-  <main>
-    <div>
-      <video id="local" autoplay playsinline muted></video>
-      <div style="padding:6px 4px; font-size:12px; opacity:.8;">Tu cámara</div>
-    </div>
-    <div>
-      <video id="remote" autoplay playsinline></video>
-      <div style="padding:6px 4px; font-size:12px; opacity:.8;">La otra cámara</div>
-    </div>
-  </main>
+  <h1>Potencial Salón — Calendario + KIT real + Rentabilidad (ROS/ROI)</h1>
+  <p class="small">
+    Base:
+    <span class="mono">ServiciosColor = DíasEfectivos × Clientes/día × %Color</span> ·
+    <span class="mono">CostoKit/serv = Σ(PrecioEnvase × grUsados/grEnvase) ÷ (serviciosPorKit)</span> ·
+    <span class="mono">SellIn = ServiciosColor × CostoKit/serv</span>
+  </p>
 
-  <div id="debug"></div>
-  <footer>18+. No podemos impedir capturas. Sin chat. Ética primero.</footer>
+  <div class="grid">
+    <!-- ===== INPUTS ===== -->
+    <div class="card">
+      <h2>Inputs</h2>
 
-  <!-- Firebase (modular SDK) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import {
-      getFirestore, collection, addDoc, doc, onSnapshot, setDoc, updateDoc, deleteDoc,
-      serverTimestamp, getDoc, runTransaction
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+      <div class="twoCols">
+        <div>
+          <div class="row">
+            <label for="year">Año (para feriados)</label>
+            <input id="year" type="number" min="2000" max="2100" step="1" value="2026">
+          </div>
 
-    // === TU CONFIG ===
-    const firebaseConfig = {
-      apiKey: "AIzaSyBQpw229ZmaSOegmCYVeLinPrIBUW_8sd0",
-      authDomain: "miradasweb-b6014.firebaseapp.com",
-      projectId: "miradasweb-b6014",
-      storageBucket: "miradasweb-b6014.appspot.com",
-      messagingSenderId: "70594677635",
-      appId: "1:70594677635:web:ce0e8bda5855383148c4b6"
+          <div class="row">
+            <label for="weeksYear">Semanas trabajadas al año</label>
+            <input id="weeksYear" type="number" min="0" max="53" step="1" value="52">
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="row" style="grid-template-columns: 1fr 1fr;">
+            <label for="turismoMode">Semana de Turismo</label>
+            <select id="turismoMode">
+              <option value="week">Semana completa (Lun–Dom)</option>
+              <option value="thu_fri">Solo Jue+Vie</option>
+              <option value="off">No descontar Turismo</option>
+            </select>
+          </div>
+          <div class="row" style="grid-template-columns: 1fr 1fr;">
+            <label for="includeCarnaval">Carnaval</label>
+            <select id="includeCarnaval">
+              <option value="yes">Descontar Lunes y Martes</option>
+              <option value="no">No descontar</option>
+            </select>
+          </div>
+          <div class="hint">
+            Descuenta feriados <b>solo</b> si caen en días trabajados (y según completo/medio).
+          </div>
+        </div>
+      </div>
+
+      <h3>Calendario del salón</h3>
+      <p class="hint">Cada día: Completo (=1), Medio (=0,5) o Cerrado (=0).</p>
+
+      <table class="daysTable" aria-label="Días de la semana">
+        <thead><tr><th>Día</th><th>Jornada</th></tr></thead>
+        <tbody id="daysBody"></tbody>
+      </table>
+
+      <hr />
+
+      <h3>Días efectivos (con feriados)</h3>
+      <div class="kpiLine"><span>Unidades de día por semana</span><b class="mono" id="weeklyUnits">—</b></div>
+      <div class="kpiLine"><span>Días teóricos (semana × semanas)</span><b class="mono" id="diasTeoricos">—</b></div>
+      <div class="kpiLine"><span>Feriados descontados</span><b class="mono" id="feriadosDescontados">—</b></div>
+      <div class="kpiLine"><span><b>Días efectivos al año</b></span><b class="mono" id="diasCalc">—</b></div>
+
+      <div class="box">
+        <div class="small"><b>Feriados usados (UY)</b></div>
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Nombre</th><th class="right">Descuenta</th></tr></thead>
+          <tbody id="feriadosBody"></tbody>
+        </table>
+        <div class="hint">“Descuenta” depende de si el salón trabaja ese día y si es completo/medio.</div>
+      </div>
+
+      <hr />
+
+      <div class="row">
+        <label for="clientesDia">Clientes por día (promedio)</label>
+        <input id="clientesDia" type="number" min="0" step="0.1" value="12">
+      </div>
+
+      <div class="row">
+        <label for="pctColor">% servicios de color</label>
+        <div>
+          <input id="pctColor" type="range" min="0" max="100" step="1" value="80">
+          <div class="hint"><span id="pctColorVal">80</span>%</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label for="precioServicio">Precio servicio color (UYU)</label>
+        <input id="precioServicio" type="number" min="0" step="1" value="2000">
+      </div>
+
+      <div class="row">
+        <label for="fte">FTE (estilistas equivalentes)</label>
+        <input id="fte" type="number" min="0.1" step="0.1" value="3">
+      </div>
+
+      <div class="row">
+        <label for="tc">Tipo de cambio (UYU/USD)</label>
+        <input id="tc" type="number" min="0.01" step="0.01" value="38">
+      </div>
+
+      <hr />
+
+      <h3>KIT / MIX real por servicio</h3>
+      <div class="twoCols">
+        <div>
+          <div class="row">
+            <label for="serviciosPorKit">Servicios que cubre 1 kit</label>
+            <input id="serviciosPorKit" type="number" min="0.01" step="0.01" value="1">
+          </div>
+          <div class="row">
+            <label for="redondeoCosto">Redondeo costo/serv (UYU)</label>
+            <input id="redondeoCosto" type="number" min="1" step="1" value="1">
+          </div>
+          <div class="hint">Si el kit está definido “por servicio”, dejá Servicios=1. El redondeo te deja estabilizar números para pitch.</div>
+        </div>
+
+        <div class="box">
+          <div class="small"><b>Tip de coherencia</b></div>
+          <div class="hint">
+            Si el costo del kit es 30%–60% del precio del servicio, revisá:
+            gramos usados, o si el “precio servicio” es realmente ticket (incluye corte/peinado) y no solo color.
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow:auto; margin-top:8px;">
+        <table class="table" id="kitTable">
+          <thead>
+            <tr>
+              <th style="min-width:240px;">Producto</th>
+              <th class="right">Gramos/ml envase</th>
+              <th class="right">Precio envase (UYU)</th>
+              <th class="right">Gramos/ml usados por kit</th>
+              <th class="right">Costo por kit (UYU)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="kitBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" class="right"><b>Total kit (UYU)</b></td>
+              <td class="right mono"><b id="kitTotal">—</b></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colspan="4" class="right">Costo kit por servicio (UYU)</td>
+              <td class="right mono" id="kitPorServicio">—</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colspan="4" class="right">Costo kit por servicio (USD)</td>
+              <td class="right mono" id="kitPorServicioUsd">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="addKitRow">Agregar producto</button>
+        <button id="loadKitExample">Cargar ejemplo</button>
+        <button class="primary" id="calcNow">Calcular ahora</button>
+        <button id="exportPdf">Exportar a PDF</button>
+      </div>
+
+      <hr />
+
+      <h3>Rentabilidad (para chequear estimaciones)</h3>
+
+      <div class="row">
+        <label for="salarioMensual">Salario mensual por FTE (UYU)</label>
+        <input id="salarioMensual" type="number" min="0" step="1" value="0">
+      </div>
+
+      <div class="row">
+        <label for="factorCargas">Factor cargas/beneficios</label>
+        <input id="factorCargas" type="number" min="1" step="0.01" value="1.00">
+      </div>
+      <div class="hint">Ej: 1,25 si querés incluir cargas / beneficios / aguinaldo prorrateado como factor simplificado.</div>
+
+      <div class="row">
+        <label for="inversionFte">Inversión asignada por FTE (UYU)</label>
+        <input id="inversionFte" type="number" min="0" step="1" value="0">
+      </div>
+      <div class="hint">Para ROI “clásico”. Ej: stock promedio + activos asignados + crédito operativo por persona.</div>
+
+      <hr />
+
+      <h3>Opcional (para “Total salón”)</h3>
+      <div class="row">
+        <label for="pesoColor">% del total que es Color</label>
+        <div>
+          <input id="pesoColor" type="range" min="1" max="100" step="1" value="90">
+          <div class="hint"><span id="pesoColorVal">90</span>%</div>
+        </div>
+      </div>
+
+      <div class="btns">
+        <button id="presetMarSab">Preset: Mar–Sáb completos</button>
+        <button id="presetMedioSab">Preset: Mar–Vie completos + Sáb medio</button>
+        <button id="presetFullWeek">Preset: Lun–Sáb completos</button>
+      </div>
+
+      <div class="box">
+        <div class="small"><b>Coherencia (diagnóstico)</b> <span class="pill" id="cohBadge">—</span></div>
+        <ul class="hint" id="checks" style="margin:8px 0 0; padding-left:18px;"></ul>
+      </div>
+    </div>
+
+    <!-- ===== OUTPUTS ===== -->
+    <div class="card">
+      <h2>Resultados</h2>
+
+      <p class="small">Servicios color/año</p>
+      <div class="out mono" id="servColor">—</div>
+
+      <p class="small">Costo KIT por servicio (UYU)</p>
+      <div class="out mono" id="costoPorServ">—</div>
+
+      <p class="small">Sell-in anual total (UYU) <span class="hint">(insumos estimados)</span></p>
+      <div class="out mono" id="sellinUyu">—</div>
+
+      <p class="small">Sell-in anual por FTE (UYU)</p>
+      <div class="out mono" id="sellinUyuFte">—</div>
+
+      <p class="small">Sell-in anual por FTE (USD)</p>
+      <div class="out mono" id="sellinUsdFte">—</div>
+
+      <hr />
+
+      <h3>Rentabilidad (salón + por FTE)</h3>
+
+      <p class="small">Facturación color (UYU)</p>
+      <div class="out mono" id="factColor">—</div>
+
+      <p class="small">Margen por servicio (Precio - Kit) (UYU)</p>
+      <div class="out mono" id="margenPorServicio">—</div>
+
+      <p class="small">Margen anual total (UYU) <span class="hint">(fact color - sell-in)</span></p>
+      <div class="out mono" id="margenAnualTotal">—</div>
+
+      <p class="small">Retorno por venta de servicio <span class="hint">(Margen / Facturación color)</span></p>
+      <div class="out mono" id="retornoVenta">—</div>
+
+      <hr />
+
+      <h3>Por FTE</h3>
+
+      <p class="small">Costo laboral anual por FTE (UYU)</p>
+      <div class="out mono" id="costoLaboralAnual">—</div>
+
+      <p class="small">Margen anual por FTE (UYU) <span class="hint">(margen total / FTE)</span></p>
+      <div class="out mono" id="margenAnualFte">—</div>
+
+      <p class="small">Contribución por FTE (Margen - Costo laboral) (UYU)</p>
+      <div class="out mono" id="contribucionFte">—</div>
+
+      <p class="small">ROS por FTE (Contribución / Facturación color por FTE)</p>
+      <div class="out mono" id="rosFte">—</div>
+
+      <p class="small">ROI por FTE (Contribución / Inversión asignada)</p>
+      <div class="out mono" id="roiFte">—</div>
+
+      <p class="hint">Si Inversión por FTE = 0, el ROI clásico no se calcula.</p>
+
+      <hr />
+
+      <h3>Extras</h3>
+      <p class="small">Facturación total del salón (UYU)</p>
+      <div class="out mono" id="factTotal">—</div>
+
+      <p class="hint">Total = FactColor / (%PesoColor).</p>
+    </div>
+  </div>
+
+  <!-- ===== PRINT AREA ===== -->
+  <section id="printArea">
+    <h2>Resumen de escenario</h2>
+    <p class="small" id="printTimestamp"></p>
+
+    <div class="printGrid">
+      <div>
+        <h3>Inputs</h3>
+        <div class="kv" id="printInputs"></div>
+
+        <h3>Calendario</h3>
+        <table>
+          <thead><tr><th>Día</th><th>Jornada</th></tr></thead>
+          <tbody id="printSchedule"></tbody>
+        </table>
+
+        <h3>Feriados descontados</h3>
+        <table>
+          <thead><tr><th>Fecha</th><th>Nombre</th><th class="right">Unidad</th></tr></thead>
+          <tbody id="printHolidays"></tbody>
+        </table>
+
+        <h3>KIT</h3>
+        <table>
+          <thead><tr><th>Producto</th><th class="right">Envase</th><th class="right">Precio</th><th class="right">Usado</th><th class="right">Costo</th></tr></thead>
+          <tbody id="printKit"></tbody>
+        </table>
+      </div>
+
+      <div>
+        <h3>Resultados</h3>
+        <div class="kv" id="printResults"></div>
+        <h3>Rentabilidad</h3>
+        <div class="kv" id="printProfit"></div>
+      </div>
+    </div>
+  </section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  const dayDefs = [
+    { key: "mon", label: "Lunes", idx: 1 },
+    { key: "tue", label: "Martes", idx: 2 },
+    { key: "wed", label: "Miércoles", idx: 3 },
+    { key: "thu", label: "Jueves", idx: 4 },
+    { key: "fri", label: "Viernes", idx: 5 },
+    { key: "sat", label: "Sábado", idx: 6 },
+    { key: "sun", label: "Domingo", idx: 0 },
+  ];
+
+  const dayOptions = [
+    { value: "0",   text: "Cerrado" },
+    { value: "0.5", text: "Medio" },
+    { value: "1",   text: "Completo" },
+  ];
+
+  // KIT rows state
+  let kitRows = [
+    // example empty start; user can load example
+  ];
+
+  function fmt(n, dec=0) {
+    if (!isFinite(n)) return "—";
+    return n.toLocaleString("es-UY", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  }
+  function clamp0(n){ return Math.max(0, n); }
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function isoDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+  function addDays(date, delta){
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    d.setDate(d.getDate() + delta);
+    return d;
+  }
+  function roundTo(n, step){
+    step = Number(step || 1);
+    if (!isFinite(n) || !isFinite(step) || step <= 0) return n;
+    return Math.round(n / step) * step;
+  }
+  function esc(s){
+    return String(s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  }
+
+  function buildDaysUI() {
+    const body = $("daysBody");
+    body.innerHTML = "";
+    for (const d of dayDefs) {
+      const tr = document.createElement("tr");
+      const td1 = document.createElement("td"); td1.textContent = d.label;
+      const td2 = document.createElement("td");
+      const sel = document.createElement("select"); sel.id = `day_${d.key}`;
+      for (const opt of dayOptions) {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = `${opt.text} (${opt.value})`;
+        sel.appendChild(o);
+      }
+      td2.appendChild(sel);
+      tr.appendChild(td1); tr.appendChild(td2);
+      body.appendChild(tr);
+    }
+  }
+
+  function getDayUnitByWeekdayIndex() {
+    const map = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+    for (const d of dayDefs) map[d.idx] = Number($(`day_${d.key}`).value);
+    return map;
+  }
+
+  function getWeeklyDayUnits() {
+    let sum = 0;
+    for (const d of dayDefs) sum += Number($(`day_${d.key}`).value) || 0;
+    return sum;
+  }
+
+  // Easter Sunday (Meeus/Jones/Butcher)
+  function easterSunday(year){
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19*a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2*e + 2*i - h - k) % 7;
+    const m = Math.floor((a + 11*h + 22*l) / 451);
+    const month = Math.floor((h + l - 7*m + 114) / 31);
+    const day = ((h + l - 7*m + 114) % 31) + 1;
+    return new Date(year, month-1, day);
+  }
+
+  function getUYHolidays(year){
+    // Set práctico (coherente con tu método actual)
+    const fixed = [
+      { name: "Año Nuevo", date: new Date(year, 0, 1) },
+      { name: "Día de los Trabajadores", date: new Date(year, 4, 1) },
+      { name: "Natalicio de Artigas", date: new Date(year, 5, 19) },
+      { name: "Jura de la Constitución", date: new Date(year, 6, 18) },
+      { name: "Declaratoria de la Independencia", date: new Date(year, 7, 25) },
+      { name: "Día de los Difuntos", date: new Date(year, 10, 2) },
+      { name: "Navidad", date: new Date(year, 11, 25) },
+    ];
+
+    const easter = easterSunday(year);
+    const carnaval = [
+      { name: "Carnaval (Lunes)", date: addDays(easter, -48) },
+      { name: "Carnaval (Martes)", date: addDays(easter, -47) },
+    ];
+
+    const turismoWeek = [];
+    for(let k=-6;k<=0;k++) turismoWeek.push(addDays(easter, k));
+    const turismoWeekNamed = turismoWeek.map((d, idx) => {
+      const names = ["Turismo (Lunes)","Turismo (Martes)","Turismo (Miércoles)","Turismo (Jueves)","Turismo (Viernes)","Turismo (Sábado)","Turismo (Domingo)"];
+      return { name: names[idx], date: d };
+    });
+    const turismoThuFri = [
+      { name: "Turismo (Jueves)", date: turismoWeek[3] },
+      { name: "Turismo (Viernes)", date: turismoWeek[4] },
+    ];
+
+    return { fixed, carnaval, turismoWeek: turismoWeekNamed, turismoThuFri };
+  }
+
+  function buildFeriadosTable(year, turismoMode, includeCarnaval, dayUnitMap){
+    const tbody = $("feriadosBody");
+    tbody.innerHTML = "";
+
+    const h = getUYHolidays(year);
+    let list = [...h.fixed];
+    if (includeCarnaval === "yes") list = list.concat(h.carnaval);
+    if (turismoMode === "week") list = list.concat(h.turismoWeek);
+    if (turismoMode === "thu_fri") list = list.concat(h.turismoThuFri);
+    list.sort((a,b)=>a.date - b.date);
+
+    for (const it of list) {
+      const wd = it.date.getDay();
+      const unit = Number(dayUnitMap[wd] || 0);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${isoDate(it.date)}</td><td>${esc(it.name)}</td><td class="right mono">${fmt(unit,1)}</td>`;
+      tbody.appendChild(tr);
+    }
+    return list;
+  }
+
+  // ===== KIT UI =====
+  function renderKit(){
+    const tbody = $("kitBody");
+    tbody.innerHTML = "";
+    kitRows.forEach((r, i) => {
+      const gp = Number(r.pack) || 0;
+      const pr = Number(r.price) || 0;
+      const gu = Number(r.used) || 0;
+      const cost = gp > 0 ? pr * (gu / gp) : 0;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="text" data-i="${i}" data-f="name" value="${esc(r.name||"")}" placeholder="Ej: Koleston 60g"></td>
+        <td class="right"><input type="number" min="0" step="0.1" class="right mono" data-i="${i}" data-f="pack" value="${gp||""}" placeholder="60"></td>
+        <td class="right"><input type="number" min="0" step="0.01" class="right mono" data-i="${i}" data-f="price" value="${pr||""}" placeholder="586"></td>
+        <td class="right"><input type="number" min="0" step="0.1" class="right mono" data-i="${i}" data-f="used" value="${gu||""}" placeholder="30"></td>
+        <td class="right mono">${fmt(cost,2)}</td>
+        <td class="right"><button class="danger" data-del="${i}">Borrar</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("input").forEach(inp => {
+      inp.addEventListener("input", (e) => {
+        const i = Number(e.target.dataset.i);
+        const f = e.target.dataset.f;
+        if (!kitRows[i]) return;
+        kitRows[i][f] = (f === "name") ? e.target.value : Number(e.target.value);
+        calc(); // inmediato
+      });
+    });
+
+    tbody.querySelectorAll("button[data-del]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.dataset.del);
+        kitRows.splice(i, 1);
+        renderKit();
+        calc();
+      });
+    });
+  }
+
+  function kitTotals(serviciosPorKit, redondeoCosto, tc){
+    const totalKit = kitRows.reduce((acc, r) => {
+      const gp = Number(r.pack) || 0;
+      const pr = Number(r.price) || 0;
+      const gu = Number(r.used) || 0;
+      if (gp <= 0) return acc;
+      return acc + pr * (gu / gp);
+    }, 0);
+
+    const spk = (serviciosPorKit && serviciosPorKit > 0) ? serviciosPorKit : 1;
+    const cpsRaw = totalKit / spk;
+    const cps = roundTo(cpsRaw, Math.max(1, redondeoCosto || 1));
+    const cpsUsd = (tc && tc > 0) ? (cps / tc) : NaN;
+
+    return { totalKit, cps, cpsUsd };
+  }
+
+  function read() {
+    return {
+      year: Number($("year").value),
+      weeksYear: Number($("weeksYear").value),
+      weeklyUnits: getWeeklyDayUnits(),
+      dayUnitMap: getDayUnitByWeekdayIndex(),
+      clientesDia: Number($("clientesDia").value),
+      pctColor: Number($("pctColor").value) / 100,
+      precioServicio: Number($("precioServicio").value),
+      fte: Number($("fte").value),
+      tc: Number($("tc").value),
+      pesoColor: Number($("pesoColor").value) / 100,
+      turismoMode: $("turismoMode").value,
+      includeCarnaval: $("includeCarnaval").value,
+
+      serviciosPorKit: Number($("serviciosPorKit").value),
+      redondeoCosto: Number($("redondeoCosto").value),
+
+      salarioMensual: Number($("salarioMensual").value),
+      factorCargas: Number($("factorCargas").value),
+      inversionFte: Number($("inversionFte").value),
     };
-    // =================
+  }
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+  function scheduleLabel(valueStr) {
+    const opt = dayOptions.find(o => o.value === valueStr);
+    return opt ? opt.text : "—";
+  }
 
-    const statusEl   = document.getElementById('status');
-    const enterBtn   = document.getElementById('enterBtn');
-    const nextBtn    = document.getElementById('nextBtn');
-    const leaveBtn   = document.getElementById('leaveBtn');
-    const localVideo = document.getElementById('local');
-    const remoteVideo= document.getElementById('remote');
-    const debugEl    = document.getElementById('debug');
+  function setSchedule(map) {
+    for (const d of dayDefs) {
+      const val = map[d.key];
+      if (val === undefined) continue;
+      $(`day_${d.key}`).value = String(val);
+    }
+    calc();
+  }
 
-    let pc, localStream;
-    let roomRef, role; // "caller" o "callee"
-    let unsubRoom, unsubCallerCands, unsubCalleeCands;
+  // ===== Coherence checks =====
+  function setBadge(type, text){
+    const b = $("cohBadge");
+    b.textContent = text;
+    b.className = "pill";
+    if (type === "bad") b.style.borderColor="#ffb6c0", b.style.color="#b00020";
+    if (type === "warn") b.style.borderColor="#ffd59a", b.style.color="#8a5a00";
+    if (type === "ok") b.style.borderColor="#b8f0c9", b.style.color="#0a7a3a";
+    if (type === "neutral") b.style.borderColor="#ddd", b.style.color="#444";
+  }
 
-    const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  function calc() {
+    const v = read();
 
-    const log = (...a)=>{ console.log(...a); debugEl.innerText += a.map(x=>typeof x==='object'?JSON.stringify(x):String(x)).join(' ')+"\n"; debugEl.scrollTop=debugEl.scrollHeight; };
-    const setStatus = t => { statusEl.textContent = "Estado: " + t; log("STATUS:", t); };
+    $("pctColorVal").textContent = Math.round(v.pctColor * 100);
+    $("pesoColorVal").textContent = Math.round(v.pesoColor * 100);
 
-    async function getMedia(){
-      localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
-      localVideo.srcObject = localStream;
-      log("getUserMedia ok");
+    const holidays = buildFeriadosTable(v.year, v.turismoMode, v.includeCarnaval, v.dayUnitMap);
+
+    const diasTeoricos = v.weeklyUnits * v.weeksYear;
+
+    let feriadosDescontados = 0;
+    const holidaysApplied = [];
+    for (const it of holidays) {
+      const wd = it.date.getDay();
+      const unit = Number(v.dayUnitMap[wd] || 0);
+      if (unit > 0) {
+        feriadosDescontados += unit;
+        holidaysApplied.push({ ...it, unit });
+      }
     }
 
-    function createPC(){
-      pc = new RTCPeerConnection({ iceServers });
-      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-      pc.ontrack = ev => { remoteVideo.srcObject = ev.streams[0]; log("ontrack: remote stream recibido"); };
-      pc.onicecandidate = async (event) => {
-        if (event.candidate && roomRef) {
-          const targetCol = (role === "caller")
-            ? collection(roomRef, "callerCandidates")
-            : collection(roomRef, "calleeCandidates");
-          await addDoc(targetCol, JSON.parse(JSON.stringify(event.candidate)));
-        }
-      };
-      log("RTCPeerConnection creado");
-    }
+    const diasEfectivos = Math.max(0, diasTeoricos - feriadosDescontados);
 
-    // Emparejador atómico con doc único: meta/waiting
-    async function matchOrCreateRoom(){
-      const waitingRef = doc(db, "meta", "waiting");
+    $("weeklyUnits").textContent = fmt(v.weeklyUnits, 1);
+    $("diasTeoricos").textContent = fmt(diasTeoricos, 1);
+    $("feriadosDescontados").textContent = fmt(feriadosDescontados, 1);
+    $("diasCalc").textContent = fmt(diasEfectivos, 1);
 
-      await runTransaction(db, async (tx) => {
-        const waitingSnap = await tx.get(waitingRef);
+    // KIT
+    const kit = kitTotals(v.serviciosPorKit, v.redondeoCosto, v.tc);
+    $("kitTotal").textContent = fmt(kit.totalKit, 2);
+    $("kitPorServicio").textContent = fmt(kit.cps, 2);
+    $("kitPorServicioUsd").textContent = isFinite(kit.cpsUsd) ? fmt(kit.cpsUsd, 2) : "—";
 
-        if (!waitingSnap.exists() || !waitingSnap.data().roomId) {
-          // NADIE esperando: creo sala y me marco como caller, dejo mi roomId en waiting
-          role = "caller";
-          roomRef = doc(collection(db, "rooms"));
-          tx.set(roomRef, { status:"waiting", createdAt: serverTimestamp() });
-          tx.set(waitingRef, { roomId: roomRef.id, since: serverTimestamp() });
-          log("Soy CALLER. Room:", roomRef.id);
-        } else {
-          // HAY alguien esperando: lo tomo y limpio waiting; yo soy callee
-          role = "callee";
-          const rid = waitingSnap.data().roomId;
-          roomRef = doc(db, "rooms", rid);
-          tx.update(waitingRef, { roomId: null, since: serverTimestamp() });
-          tx.update(roomRef, { status:"paired", calleeJoinedAt: serverTimestamp() });
-          log("Soy CALLEE. Par con room:", rid);
-        }
+    // Paso base (ahora usando kit)
+    const serviciosColor = diasEfectivos * v.clientesDia * v.pctColor;
+    const costoPorServ = kit.cps;
+    const sellIn = serviciosColor * costoPorServ;
+
+    const sellInPorFte = (v.fte > 0) ? (sellIn / v.fte) : NaN;
+    const sellInPorFteUsd = (v.tc > 0) ? (sellInPorFte / v.tc) : NaN;
+
+    // Facturación y margen
+    const factColor = serviciosColor * v.precioServicio;
+    const factTotal = (v.pesoColor > 0) ? (factColor / v.pesoColor) : NaN;
+
+    const margenPorServicio = v.precioServicio - costoPorServ;
+    const margenAnualTotal = factColor - sellIn;
+    const retornoVenta = (factColor > 0) ? (margenAnualTotal / factColor) : NaN;
+
+    // Rentabilidad por FTE
+    const costoLaboralAnual = v.salarioMensual * 12 * (isFinite(v.factorCargas) ? v.factorCargas : 1);
+    const margenAnualFte = (v.fte > 0) ? (margenAnualTotal / v.fte) : NaN;
+    const contribucion = margenAnualFte - costoLaboralAnual;
+
+    const factColorFte = (v.fte > 0) ? (factColor / v.fte) : NaN;
+    const ros = (factColorFte > 0) ? (contribucion / factColorFte) : NaN;
+
+    const roi = (v.inversionFte > 0) ? (contribucion / v.inversionFte) : NaN;
+
+    // Outputs
+    $("servColor").textContent = fmt(serviciosColor, 0);
+    $("costoPorServ").textContent = "$ " + fmt(costoPorServ, 0);
+    $("sellinUyu").textContent = "$ " + fmt(sellIn, 0);
+    $("sellinUyuFte").textContent = "$ " + fmt(sellInPorFte, 0);
+    $("sellinUsdFte").textContent = (isFinite(sellInPorFteUsd) ? "USD " + fmt(sellInPorFteUsd, 0) : "—");
+
+    $("factColor").textContent = "$ " + fmt(factColor, 0);
+    $("factTotal").textContent = "$ " + fmt(factTotal, 0);
+
+    $("margenPorServicio").textContent = "$ " + fmt(margenPorServicio, 0);
+    $("margenAnualTotal").textContent = "$ " + fmt(margenAnualTotal, 0);
+    $("retornoVenta").textContent = isFinite(retornoVenta) ? fmt(retornoVenta * 100, 1) + "%" : "—";
+
+    $("costoLaboralAnual").textContent = "$ " + fmt(costoLaboralAnual, 0);
+    $("margenAnualFte").textContent = "$ " + fmt(margenAnualFte, 0);
+    $("contribucionFte").textContent = "$ " + fmt(contribucion, 0);
+    $("rosFte").textContent = isFinite(ros) ? fmt(ros * 100, 1) + "%" : "—";
+    $("roiFte").textContent = isFinite(roi) ? fmt(roi * 100, 1) + "%" : "—";
+
+    // Coherence checks
+    const issues = [];
+    const warnings = [];
+
+    if (!(v.weeksYear >= 0 && v.weeksYear <= 53)) issues.push(`Semanas trabajadas (${v.weeksYear}) fuera de 0–53.`);
+    if (v.weeklyUnits <= 0) issues.push(`No hay días trabajados: unidades día/semana = ${fmt(v.weeklyUnits,1)}.`);
+    if (diasEfectivos > 366) issues.push(`Días efectivos/año (${fmt(diasEfectivos,1)}) > 366: imposible. Revisá semanas y calendario.`);
+    if (!(v.fte > 0)) issues.push(`FTE debe ser > 0.`);
+    if (!(v.tc > 0)) issues.push(`Tipo de cambio debe ser > 0 para USD.`);
+    if (!(v.precioServicio > 0)) issues.push(`Precio servicio debe ser > 0.`);
+    if (!(v.clientesDia >= 0)) issues.push(`Clientes/día inválido (${v.clientesDia}).`);
+    if (!(v.pctColor >= 0 && v.pctColor <= 1)) issues.push(`%Color fuera de 0–100.`);
+
+    if (!Array.isArray(kitRows) || kitRows.length === 0) issues.push(`KIT vacío: agregá productos o cargá ejemplo.`);
+    if (Array.isArray(kitRows)) {
+      kitRows.forEach((r, i) => {
+        const gp = Number(r.pack)||0;
+        const pr = Number(r.price)||0;
+        const gu = Number(r.used)||0;
+        if (gp <= 0) issues.push(`KIT fila ${i+1}: envase = ${gp} (debe ser > 0).`);
+        if (pr < 0) issues.push(`KIT fila ${i+1}: precio negativo (${pr}).`);
+        if (gu < 0) issues.push(`KIT fila ${i+1}: usado negativo (${gu}).`);
+        if (gp > 0 && gu > gp) warnings.push(`KIT fila ${i+1}: usado (${gu}) > envase (${gp}). ¿Seguro que el usado está por kit y no por servicio?`);
       });
     }
 
-    async function startSignaling(){
-      // listeners de sala y candidatos
-      if (role === "caller"){
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await updateDoc(roomRef, { offer: { type: offer.type, sdp: offer.sdp } });
-        log("Offer creada y subida");
+    const ratioCosto = (v.precioServicio > 0) ? (costoPorServ / v.precioServicio) : NaN;
+    if (isFinite(ratioCosto)) {
+      if (ratioCosto > 0.60) warnings.push(`Costo kit/servicio = ${fmt(ratioCosto*100,1)}% del precio: muy alto. Probable sobreconsumo o ticket mal definido.`);
+      if (ratioCosto < 0.05) warnings.push(`Costo kit/servicio = ${fmt(ratioCosto*100,1)}% del precio: muy bajo. Puede faltar algo del kit (oxidante/deco/tratamiento).`);
+    }
 
-        unsubRoom = onSnapshot(roomRef, async (snap)=>{
-          const data = snap.data();
-          if (data?.answer && !pc.currentRemoteDescription){
-            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-            setStatus("conectado");
-            nextBtn.disabled = false; leaveBtn.disabled = false;
-          }
-        });
+    if (margenPorServicio < 0) issues.push(`Margen por servicio negativo (Precio < Costo kit).`);
+    if (retornoVenta < 0) warnings.push(`Retorno por venta negativo: el kit está comiéndose la facturación de color.`);
+    if (v.salarioMensual > 0 && contribucion < 0) warnings.push(`Contribución/FTE negativa con ese salario: este escenario no “cierra” sin otros ingresos/servicios.`);
 
-        unsubCalleeCands = onSnapshot(collection(roomRef, "calleeCandidates"), (snap)=>{
-          snap.docChanges().forEach(async (c)=>{
-            if (c.type === "added"){
-              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); log("ICE callee agregado"); } catch(e){ log("ICE callee error", e); }
-            }
-          });
-        });
+    // Badge
+    if (issues.length > 0) setBadge("bad", `Incoherencias: ${issues.length} · Adv: ${warnings.length}`);
+    else if (warnings.length > 0) setBadge("warn", `Advertencias: ${warnings.length}`);
+    else setBadge("ok", "OK");
 
-      } else {
-        unsubRoom = onSnapshot(roomRef, async (snap)=>{
-          const data = snap.data();
-          if (data?.offer && !pc.currentRemoteDescription){
-            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await updateDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } });
-            setStatus("conectado");
-            nextBtn.disabled = false; leaveBtn.disabled = false;
-            log("Answer creada y subida");
-          }
-        });
+    // Render checks list
+    const ul = $("checks");
+    ul.innerHTML = "";
+    const lines = [];
+    issues.forEach(s => lines.push(`<li class="bad">${esc(s)}</li>`));
+    warnings.forEach(s => lines.push(`<li class="warn">${esc(s)}</li>`));
+    if (lines.length === 0) lines.push(`<li class="ok">Consistente: no vi incoherencias con los rangos básicos.</li>`);
+    ul.innerHTML = lines.join("");
 
-        unsubCallerCands = onSnapshot(collection(roomRef, "callerCandidates"), (snap)=>{
-          snap.docChanges().forEach(async (c)=>{
-            if (c.type === "added"){
-              try{ await pc.addIceCandidate(new RTCIceCandidate(c.doc.data())); log("ICE caller agregado"); } catch(e){ log("ICE caller error", e); }
-            }
-          });
-        });
+    // save state for print
+    window.__calcState = {
+      v, diasTeoricos, feriadosDescontados, diasEfectivos,
+      serviciosColor, costoPorServ, sellIn, sellInPorFte, sellInPorFteUsd,
+      factColor, factTotal,
+      margenPorServicio, margenAnualTotal, retornoVenta,
+      costoLaboralAnual, margenAnualFte, contribucion, ros, roi,
+      holidaysApplied,
+      kitRows: JSON.parse(JSON.stringify(kitRows)),
+      kitTotal: kit.totalKit,
+      kitCps: kit.cps
+    };
+  }
+
+  function addKV(container, key, value) {
+    const k = document.createElement("div");
+    k.textContent = key;
+    const v = document.createElement("div");
+    v.className = "val";
+    v.textContent = value;
+    container.appendChild(k);
+    container.appendChild(v);
+  }
+
+  function buildPrintSummary() {
+    const s = window.__calcState;
+    const now = new Date();
+    $("printTimestamp").textContent = `Generado: ${now.toLocaleString("es-UY")} · Año feriados: ${s.v.year}`;
+
+    const printInputs = $("printInputs");
+    printInputs.innerHTML = "";
+    addKV(printInputs, "Semanas/año", fmt(s.v.weeksYear, 0));
+    addKV(printInputs, "Unidades día/semana", fmt(s.v.weeklyUnits, 1));
+    addKV(printInputs, "Días teóricos/año", fmt(s.diasTeoricos, 1));
+    addKV(printInputs, "Feriados descontados", fmt(s.feriadosDescontados, 1));
+    addKV(printInputs, "Días efectivos/año", fmt(s.diasEfectivos, 1));
+    addKV(printInputs, "Clientes por día", fmt(s.v.clientesDia, 1));
+    addKV(printInputs, "% servicios de color", `${Math.round(s.v.pctColor * 100)}%`);
+    addKV(printInputs, "Precio servicio color (UYU)", `$ ${fmt(s.v.precioServicio, 0)}`);
+    addKV(printInputs, "FTE", fmt(s.v.fte, 1));
+    addKV(printInputs, "TC (UYU/USD)", fmt(s.v.tc, 2));
+    addKV(printInputs, "% del total que es color", `${Math.round(s.v.pesoColor * 100)}%`);
+    addKV(printInputs, "Servicios por KIT", fmt(s.v.serviciosPorKit, 2));
+    addKV(printInputs, "Costo KIT por servicio (UYU)", `$ ${fmt(s.kitCps, 0)}`);
+    addKV(printInputs, "Salario mensual por FTE", `$ ${fmt(s.v.salarioMensual, 0)}`);
+    addKV(printInputs, "Factor cargas", fmt(s.v.factorCargas, 2));
+    addKV(printInputs, "Inversión por FTE", `$ ${fmt(s.v.inversionFte, 0)}`);
+    addKV(printInputs, "Carnaval", s.v.includeCarnaval === "yes" ? "Descontado" : "No");
+    addKV(printInputs, "Turismo", s.v.turismoMode === "week" ? "Semana completa" : (s.v.turismoMode === "thu_fri" ? "Solo Jue+Vie" : "No"));
+
+    const ps = $("printSchedule");
+    ps.innerHTML = "";
+    for (const d of dayDefs) {
+      const selVal = $(`day_${d.key}`).value;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${d.label}</td><td>${scheduleLabel(selVal)} (${selVal})</td>`;
+      ps.appendChild(tr);
+    }
+
+    const ph = $("printHolidays");
+    ph.innerHTML = "";
+    if (s.holidaysApplied.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="3" class="mono">Ninguno (según días trabajados)</td>`;
+      ph.appendChild(tr);
+    } else {
+      for (const it of s.holidaysApplied) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${isoDate(it.date)}</td><td>${esc(it.name)}</td><td class="right mono">${fmt(it.unit,1)}</td>`;
+        ph.appendChild(tr);
       }
     }
 
-    async function enter(){
-      try{
-        enterBtn.disabled = true;
-        setStatus("pidiendo cámara…");
-        await getMedia();
-        createPC();
-        setStatus("buscando pareja…");
-        await matchOrCreateRoom();
-        await startSignaling();
-      } catch(e){
-        log("ERROR enter()", e);
-        enterBtn.disabled = false;
-      }
+    const pk = $("printKit");
+    pk.innerHTML = "";
+    if (!s.kitRows || s.kitRows.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="5" class="mono">KIT vacío</td>`;
+      pk.appendChild(tr);
+    } else {
+      s.kitRows.forEach(r => {
+        const gp = Number(r.pack)||0, pr = Number(r.price)||0, gu = Number(r.used)||0;
+        const cost = gp>0 ? pr*(gu/gp) : 0;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${esc(r.name||"")}</td><td class="right mono">${fmt(gp,1)}</td><td class="right mono">${fmt(pr,2)}</td><td class="right mono">${fmt(gu,1)}</td><td class="right mono">${fmt(cost,2)}</td>`;
+        pk.appendChild(tr);
+      });
     }
 
-    async function cleanup(){
-      nextBtn.disabled = true; leaveBtn.disabled = true;
-      try { if (unsubRoom) unsubRoom(); if (unsubCallerCands) unsubCallerCands(); if (unsubCalleeCands) unsubCalleeCands(); } catch{}
-      try { if (roomRef) await updateDoc(roomRef, { status:"ended" }); } catch{}
-      try { if (roomRef) await deleteDoc(roomRef); } catch{}
-      roomRef = null;
+    const pr = $("printResults");
+    pr.innerHTML = "";
+    addKV(pr, "Servicios color/año", fmt(s.serviciosColor, 0));
+    addKV(pr, "Sell-in anual (UYU)", `$ ${fmt(s.sellIn, 0)}`);
+    addKV(pr, "Sell-in por FTE (UYU)", `$ ${fmt(s.sellInPorFte, 0)}`);
+    addKV(pr, "Facturación color (UYU)", `$ ${fmt(s.factColor, 0)}`);
+    addKV(pr, "Margen anual total (UYU)", `$ ${fmt(s.margenAnualTotal, 0)}`);
+    addKV(pr, "Retorno por venta", isFinite(s.retornoVenta) ? fmt(s.retornoVenta*100,1)+"%" : "—");
+    addKV(pr, "Facturación total salón (UYU)", `$ ${fmt(s.factTotal, 0)}`);
 
-      if (pc){
-        pc.getSenders().forEach(s=>{ try{ s.track.stop(); }catch{} });
-        try{ pc.close(); }catch{}
-        pc = null;
-      }
-      remoteVideo.srcObject = null;
-      localVideo.srcObject = null;
-      setStatus("saliste");
-      enterBtn.disabled = false;
+    const pp = $("printProfit");
+    pp.innerHTML = "";
+    addKV(pp, "Costo laboral anual por FTE", `$ ${fmt(s.costoLaboralAnual, 0)}`);
+    addKV(pp, "Margen anual por FTE", `$ ${fmt(s.margenAnualFte, 0)}`);
+    addKV(pp, "Contribución por FTE", `$ ${fmt(s.contribucion, 0)}`);
+    addKV(pp, "ROS por FTE", isFinite(s.ros) ? fmt(s.ros*100,1)+"%" : "—");
+    addKV(pp, "ROI por FTE", isFinite(s.roi) ? fmt(s.roi*100,1)+"%" : "—");
+  }
+
+  function bind() {
+    const ids = [
+      "year","weeksYear","clientesDia","pctColor","precioServicio","fte","tc","pesoColor",
+      "turismoMode","includeCarnaval",
+      "serviciosPorKit","redondeoCosto",
+      "salarioMensual","factorCargas","inversionFte"
+    ];
+    for (const id of ids) {
+      $(id).addEventListener("input", calc);
+      $(id).addEventListener("change", calc);
     }
 
-    async function next(){
-      await cleanup();
-      await enter();
-      setStatus("siguiente pareja…");
+    for (const d of dayDefs) {
+      $(`day_${d.key}`).addEventListener("change", calc);
+      $(`day_${d.key}`).addEventListener("input", calc);
     }
 
-    document.getElementById('enterBtn').onclick = enter;
-    document.getElementById('leaveBtn').onclick = cleanup;
-    document.getElementById('nextBtn').onclick  = next;
-  </script>
+    $("presetMarSab").addEventListener("click", () => setSchedule({ mon:0, tue:1, wed:1, thu:1, fri:1, sat:1, sun:0 }));
+    $("presetMedioSab").addEventListener("click", () => setSchedule({ mon:0, tue:1, wed:1, thu:1, fri:1, sat:0.5, sun:0 }));
+    $("presetFullWeek").addEventListener("click", () => setSchedule({ mon:1, tue:1, wed:1, thu:1, fri:1, sat:1, sun:0 }));
+
+    $("addKitRow").addEventListener("click", () => {
+      kitRows.push({ name:"", pack:0, price:0, used:0 });
+      renderKit();
+      calc();
+    });
+
+    $("loadKitExample").addEventListener("click", () => {
+      kitRows = [
+        { name:"Color (tubo)", pack:60, price:586, used:30 },
+        { name:"Oxidante (1L)", pack:1000, price:1103, used:60 },
+        { name:"Decolorante (400g)", pack:400, price:2878, used:20 },
+      ];
+      renderKit();
+      calc();
+    });
+
+    $("calcNow").addEventListener("click", calc);
+
+    $("exportPdf").addEventListener("click", () => {
+      calc(); // asegurar estado
+      buildPrintSummary();
+      window.print();
+    });
+  }
+
+  // init
+  buildDaysUI();
+  // Default schedule: Mar–Sáb completos
+  setSchedule({ mon:0, tue:1, wed:1, thu:1, fri:1, sat:1, sun:0 });
+  renderKit();
+  bind();
+  calc();
+</script>
 </body>
 </html>
